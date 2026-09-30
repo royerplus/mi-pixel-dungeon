@@ -219,6 +219,16 @@ public class SPDSettings extends GameSettings {
 	//Game State
 	
 	public static final String KEY_LAST_CLASS	= "last_class";
+	public static final String KEY_MP_NAME		= "mp_name";
+
+	public static void mpName( String value ) {
+		put( KEY_MP_NAME, value );
+	}
+
+	public static String mpName() {
+		return getString( KEY_MP_NAME, "", 20 );
+	}
+
 	public static final String KEY_CHALLENGES	= "challenges";
 	public static final String KEY_CUSTOM_SEED	= "custom_seed";
 	public static final String KEY_LAST_DAILY	= "last_daily";

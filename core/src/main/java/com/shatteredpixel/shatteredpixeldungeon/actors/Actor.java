@@ -28,6 +28,8 @@ import com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Buff;
 import com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob;
 import com.shatteredpixel.shatteredpixeldungeon.effects.TargetedCell;
 import com.shatteredpixel.shatteredpixeldungeon.levels.VaultLevel;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MP;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MPAuthority;
 import com.watabou.noosa.Game;
 import com.watabou.utils.Bundlable;
 import com.watabou.utils.Bundle;
@@ -256,7 +258,8 @@ public abstract class Actor implements Bundlable {
 		do {
 			
 			current = null;
-			if (!interrupted && !Game.switchingScene()) {
+			//the enemy player's device only displays the game, it never simulates it
+			if (!interrupted && !Game.switchingScene() && !MP.mirror) {
 				float earliest = Float.MAX_VALUE;
 
 				synchronized (Actor.class) {
@@ -303,12 +306,16 @@ public abstract class Actor implements Bundlable {
 						doNext = false;
 						current = null;
 					}
+					MPAuthority.afterAct( acting );
 				}
 			} else {
 				doNext = false;
 			}
 
 			if (!doNext){
+				if (!interrupted) {
+					MPAuthority.beforeIdle();
+				}
 				synchronized (Thread.currentThread()) {
 					
 					interrupted = interrupted || Thread.interrupted();
@@ -383,6 +390,24 @@ public abstract class Actor implements Bundlable {
 		}
 	}
 	
+	//used by the enemy player's device to replace all characters with fresh copies from the hero device
+	public static synchronized void mirrorClearChars() {
+		for (Actor ch : chars) {
+			all.remove( ch );
+			if (ch.id > 0) {
+				ids.remove( ch.id );
+			}
+		}
+		chars.clear();
+	}
+
+	public static synchronized void mirrorAddChar( Char ch ) {
+		if (ch == null) return;
+		all.add( ch );
+		chars.add( ch );
+		ids.put( ch.id(), ch );
+	}
+
 	public static synchronized Char findChar( int pos ) {
 		for (Char ch : chars){
 			if (ch.pos == pos)

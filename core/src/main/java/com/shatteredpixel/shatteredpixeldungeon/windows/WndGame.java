@@ -26,6 +26,7 @@ import com.shatteredpixel.shatteredpixeldungeon.GamesInProgress;
 import com.shatteredpixel.shatteredpixeldungeon.SPDSettings;
 import com.shatteredpixel.shatteredpixeldungeon.ShatteredPixelDungeon;
 import com.shatteredpixel.shatteredpixeldungeon.messages.Messages;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MP;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.HeroSelectScene;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene;
@@ -49,6 +50,11 @@ public class WndGame extends Window {
 	public WndGame() {
 		
 		super();
+
+		if (MP.inGame()){
+			buildOnline();
+			return;
+		}
 
 		//settings
 		RedButton curBtn;
@@ -115,6 +121,78 @@ public class WndGame extends Window {
 		resize( WIDTH, pos );
 	}
 	
+	//menu used during online games
+	private void buildOnline(){
+		RedButton curBtn;
+		addButton( curBtn = new RedButton( Messages.get(this, "settings") ) {
+			@Override
+			protected void onClick() {
+				hide();
+				GameScene.show(new WndSettings());
+			}
+		});
+		curBtn.icon(Icons.get(Icons.PREFS));
+
+		if (Dungeon.challenges > 0) {
+			addButton( curBtn = new RedButton( Messages.get(this, "challenges") ) {
+				@Override
+				protected void onClick() {
+					hide();
+					GameScene.show( new WndChallenges( Dungeon.challenges, false ) );
+				}
+			} );
+			curBtn.icon(Icons.get(Icons.CHALLENGE_COLOR));
+		}
+
+		if (!MP.gameFinished() && MP.peerPresent()) {
+			addButton( curBtn = new RedButton( MP.txt("swap_roles") ) {
+				@Override
+				protected void onClick() {
+					hide();
+					MP.requestSwap();
+				}
+			} );
+			curBtn.icon(Icons.get(Icons.SHUFFLE));
+		}
+
+		addButton( curBtn = new RedButton( MP.txt("to_lobby") ) {
+			@Override
+			protected void onClick() {
+				hide();
+				if (MP.gameFinished()){
+					MP.endGameToLobby(true);
+				} else {
+					GameScene.show(new WndOptions(Icons.get(Icons.WARNING), MP.txt("to_lobby"), MP.txt("to_lobby_confirm"),
+							MP.txt("to_lobby"), MP.txt("cancel")){
+						@Override
+						protected void onSelect(int index) {
+							if (index == 0) MP.endGameToLobby(true);
+						}
+					});
+				}
+			}
+		} );
+		curBtn.icon(Icons.get(Icons.ENTER));
+		curBtn.textColor(Window.TITLE_COLOR);
+
+		addButton( curBtn = new RedButton( MP.txt("leave") ) {
+			@Override
+			protected void onClick() {
+				hide();
+				GameScene.show(new WndOptions(Icons.get(Icons.WARNING), MP.txt("leave"), MP.txt("leave_game_confirm"),
+						MP.txt("leave"), MP.txt("cancel")){
+					@Override
+					protected void onSelect(int index) {
+						if (index == 0) MP.leave(null);
+					}
+				});
+			}
+		} );
+		curBtn.icon(Icons.get(Icons.EXIT));
+
+		resize( WIDTH, pos );
+	}
+
 	private void addButton( RedButton btn ) {
 		add( btn );
 		btn.setRect( 0, pos > 0 ? pos += GAP : 0, WIDTH, BTN_HEIGHT );

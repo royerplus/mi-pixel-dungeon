@@ -38,6 +38,8 @@ import com.shatteredpixel.shatteredpixeldungeon.effects.particles.FlameParticle;
 import com.shatteredpixel.shatteredpixeldungeon.effects.particles.ShadowParticle;
 import com.shatteredpixel.shatteredpixeldungeon.effects.particles.SnowParticle;
 import com.shatteredpixel.shatteredpixeldungeon.messages.Messages;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MP;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MPAuthority;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.PixelScene;
 import com.shatteredpixel.shatteredpixeldungeon.tiles.DungeonTilemap;
@@ -197,6 +199,9 @@ public class CharSprite extends MovieClip implements Tweener.Listener, MovieClip
 	}
 
 	public void showStatusWithIcon( int color, String text, int icon, Object... args ) {
+		if (MP.authority && ch != null) {
+			MPAuthority.recordStatus( ch, color, args.length > 0 ? Messages.format( text, args ) : text, icon );
+		}
 		if (visible) {
 			if (args.length > 0) {
 				text = Messages.format( text, args );
@@ -258,9 +263,27 @@ public class CharSprite extends MovieClip implements Tweener.Listener, MovieClip
 	}
 	
 	public synchronized void attack( int cell, Callback callback ) {
+		MPAuthority.recordAttack( ch, cell );
 		animCallback = callback;
 		turnTo( ch.pos, cell );
 		play( attack );
+	}
+
+	//online play: purely visual attack animation, used on the enemy player's device
+	public synchronized void mpPlayAttack( int cell ) {
+		if (ch == null || attack == null) return;
+		animCallback = null;
+		turnTo( ch.pos, cell );
+		play( attack );
+	}
+
+	//online play: points this sprite at a fresh copy of its character
+	public void mpRelink( Char newCh ) {
+		this.ch = newCh;
+		newCh.sprite = this;
+		if (health != null) {
+			health.target( newCh );
+		}
 	}
 	
 	public void operate( int cell ) {
@@ -278,6 +301,7 @@ public class CharSprite extends MovieClip implements Tweener.Listener, MovieClip
 	}
 	
 	public synchronized void zap( int cell, Callback callback ) {
+		MPAuthority.recordZap( ch, cell );
 		animCallback = callback;
 		turnTo( ch.pos, cell );
 		play( zap );
@@ -830,7 +854,7 @@ public class CharSprite extends MovieClip implements Tweener.Listener, MovieClip
 
 				motion.killAndErase();
 				motion = null;
-				ch.onMotionComplete();
+				if (!MP.mirror && ch != null) ch.onMotionComplete();
 
 				GameScene.sortMobSprites();
 				notifyAll();
@@ -841,6 +865,15 @@ public class CharSprite extends MovieClip implements Tweener.Listener, MovieClip
 
 	@Override
 	public synchronized void onComplete( Animation anim ) {
+
+		//the enemy player's device only shows animations, game logic happens on the hero's device
+		if (MP.mirror) {
+			animCallback = null;
+			if (anim == attack || anim == operate || anim == zap) {
+				idle();
+			}
+			return;
+		}
 		
 		if (animCallback != null) {
 			Callback executing = animCallback;

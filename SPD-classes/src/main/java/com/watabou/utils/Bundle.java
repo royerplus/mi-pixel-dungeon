@@ -532,6 +532,19 @@ public class Bundle {
 		}
 	}
 
+	//used for sending bundles over the network
+	public static Bundle fromString( String json ) throws IOException {
+		try {
+			Object obj = new JSONTokener(json).nextValue();
+			if (!(obj instanceof JSONObject)){
+				throw new JSONException("Malformed JSON Object");
+			}
+			return new Bundle( (JSONObject) obj );
+		} catch (Exception e) {
+			throw new IOException(e);
+		}
+	}
+
 	public static boolean write( Bundle bundle, OutputStream stream ){
 		return write(bundle, stream, compressByDefault);
 	}

@@ -31,6 +31,24 @@ import java.util.Comparator;
 public class Group extends Gizmo {
 
 	protected ArrayList<Gizmo> members;
+
+	public synchronized Gizmo[] membersCopy(){
+		return members == null ? new Gizmo[0] : members.toArray(new Gizmo[0]);
+	}
+
+	//deactivates and hides this group and everything inside it, including key bound buttons
+	public synchronized void deactivateAll(){
+		active = false;
+		visible = false;
+		if (members == null) return;
+		for (Gizmo g : members){
+			if (g == null) continue;
+			g.active = false;
+			if (g instanceof Group){
+				((Group) g).deactivateAll();
+			}
+		}
+	}
 	
 	// Accessing it is a little faster,
 	// than calling members.getSize()

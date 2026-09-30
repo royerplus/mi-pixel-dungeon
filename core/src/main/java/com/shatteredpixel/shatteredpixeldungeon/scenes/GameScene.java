@@ -76,6 +76,11 @@ import com.shatteredpixel.shatteredpixeldungeon.levels.rooms.Room;
 import com.shatteredpixel.shatteredpixeldungeon.levels.rooms.secret.SecretRoom;
 import com.shatteredpixel.shatteredpixeldungeon.levels.traps.Trap;
 import com.shatteredpixel.shatteredpixeldungeon.messages.Messages;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MP;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MPHud;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MPMirror;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MPWaitScene;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.Net;
 import com.shatteredpixel.shatteredpixeldungeon.plants.Plant;
 import com.shatteredpixel.shatteredpixeldungeon.sprites.CharSprite;
 import com.shatteredpixel.shatteredpixeldungeon.sprites.DiscardedItemSprite;
@@ -223,13 +228,21 @@ public class GameScene extends PixelScene {
 	public void create() {
 		
 		if (Dungeon.hero == null || Dungeon.level == null){
-			ShatteredPixelDungeon.switchNoFade(TitleScene.class);
+			if (MP.mirror){
+				//the floor could not be rebuilt, ask the hero device for it again
+				Net.send(MP.MSG_RESYNC);
+				MPWaitScene.show(MP.txt("wait_floor"));
+			} else {
+				ShatteredPixelDungeon.switchNoFade(TitleScene.class);
+			}
 			return;
 		}
 
+		mirrorMode = MP.mirror;
+
 		Dungeon.level.playLevelMusic();
 
-		SPDSettings.lastClass(Dungeon.hero.heroClass.ordinal());
+		if (!mirrorMode) SPDSettings.lastClass(Dungeon.hero.heroClass.ordinal());
 		
 		super.create();
 		Camera.main.zoom( GameMath.gate(minZoom, defaultZoom + SPDSettings.zoom(), maxZoom));
@@ -323,7 +336,16 @@ public class GameScene extends PixelScene {
 		mobs.add( hero );
 		
 		for (Mob mob : Dungeon.level.mobs) {
-			addMobSprite( mob );
+			if (mirrorMode) {
+				//a copied creature with an unusual sprite should never break the enemy player's view
+				try {
+					addMobSprite( mob );
+				} catch (Exception e) {
+					ShatteredPixelDungeon.reportException(e);
+				}
+			} else {
+				addMobSprite( mob );
+			}
 		}
 		
 		raisedTerrain = new RaisedTerrainTilemap();
@@ -589,7 +611,7 @@ public class GameScene extends PixelScene {
 				break;
 		}
 
-		ArrayList<Item> dropped = Dungeon.droppedItems.get( Dungeon.depth );
+		ArrayList<Item> dropped = mirrorMode || Dungeon.droppedItems == null ? null : Dungeon.droppedItems.get( Dungeon.depth );
 		if (dropped != null) {
 			for (Item item : dropped) {
 				int pos = Dungeon.level.randomRespawnCell( null );
@@ -621,7 +643,7 @@ public class GameScene extends PixelScene {
 		}
 		Camera.main.panTo(hero.center(), 2.5f);
 
-		if (InterlevelScene.mode != InterlevelScene.Mode.NONE) {
+		if (InterlevelScene.mode != InterlevelScene.Mode.NONE && !mirrorMode) {
 			if (Dungeon.depth == Statistics.deepestFloor
 					&& (InterlevelScene.mode == InterlevelScene.Mode.DESCEND || InterlevelScene.mode == InterlevelScene.Mode.FALL)) {
 				GLog.h(Messages.get(this, "descend"), Dungeon.depth);
@@ -743,7 +765,7 @@ public class GameScene extends PixelScene {
 		}
 
 		//Tutorial
-		if (SPDSettings.intro()){
+		if (SPDSettings.intro() && !mirrorMode){
 
 			if (Document.ADVENTURERS_GUIDE.isPageFound(Document.GUIDE_INTRO)){
 				GameScene.flashForDocument(Document.ADVENTURERS_GUIDE, Document.GUIDE_INTRO);
@@ -762,19 +784,31 @@ public class GameScene extends PixelScene {
 			if (inventory != null) inventory.visible = inventory.active = false;
 		}
 
-		if (!SPDSettings.intro() &&
+		if (!mirrorMode && !SPDSettings.intro() &&
 				Rankings.INSTANCE.totalNumber > 0 &&
 				!Document.ADVENTURERS_GUIDE.isPageRead(Document.GUIDE_DIEING)){
 			GameScene.flashForDocument(Document.ADVENTURERS_GUIDE, Document.GUIDE_DIEING);
 		}
 
-		TrinketCatalyst cata = Dungeon.hero.belongings.getItem(TrinketCatalyst.class);
+		TrinketCatalyst cata = mirrorMode ? null : Dungeon.hero.belongings.getItem(TrinketCatalyst.class);
 		if (cata != null && cata.hasRolledTrinkets()){
 			addToFront(new TrinketCatalyst.WndTrinket(cata));
 		}
 
-		if (!invVisible) toggleInvPane();
+		if (!invVisible && !mirrorMode) toggleInvPane();
 		fadeIn();
+
+		//online play extras
+		if (mirrorMode){
+			InterlevelScene.mode = InterlevelScene.Mode.NONE;
+			hideHeroInterface();
+			MPHud.attachMirror(this, insets, screentop);
+			selectCell(defaultCellListener);
+			MPMirror.onSceneCreated();
+			return;
+		} else if (MP.authority){
+			MPHud.attachHero(this, insets, screentop);
+		}
 
 		//re-show WndResurrect if needed
 		if (!Dungeon.hero.isAlive()){
@@ -836,6 +870,11 @@ public class GameScene extends PixelScene {
 	
 	@Override
 	public synchronized void onPause() {
+		if (mirrorMode){
+			Badges.saveGlobal();
+			Journal.saveGlobal();
+			return;
+		}
 		try {
 			if (!Dungeon.hero.ready) waitForActorThread(500, false);
 			Dungeon.saveAll();
@@ -891,7 +930,7 @@ public class GameScene extends PixelScene {
 			waterOfs = water.offsetY(); //re-assign to account for auto adjust
 		}
 
-		if (!Actor.processing() && Dungeon.hero.isAlive()) {
+		if (!mirrorMode && !Actor.processing() && Dungeon.hero.isAlive()) {
 			if (actorThread == null || !actorThread.isAlive()) {
 				
 				actorThread = new Thread() {
@@ -951,7 +990,7 @@ public class GameScene extends PixelScene {
 
 		}
 
-		cellSelector.enable(Dungeon.hero.ready);
+		cellSelector.enable(Dungeon.hero.ready || mirrorMode);
 
 		if (!toDestroy.isEmpty()) {
 			for (Gizmo g : toDestroy) {
@@ -1081,6 +1120,60 @@ public class GameScene extends PixelScene {
 	private void addBlobSprite( final Blob gas ) {
 		if (gas.emitter == null) {
 			gases.add( new BlobEmitter( gas ) );
+		}
+	}
+
+	// ***** online play *****
+
+	//true when this scene only displays a game running on the other player's device
+	private boolean mirrorMode = false;
+
+	public static boolean isMirrorScene(){
+		return scene != null && scene.mirrorMode;
+	}
+
+	public static void addBlobSprite( Blob gas, boolean mirror ){
+		if (scene != null) scene.addBlobSprite( gas );
+	}
+
+	//adds a world-space visual drawn above characters
+	public static void addOverlay( Gizmo g ){
+		if (scene != null) scene.emoicons.add( g );
+	}
+
+	private void hideHeroInterface(){
+		Group[] hide = new Group[]{ status, toolbar, attack, loot, action, resume, log, menu, boss, inventory };
+		for (Group g : hide){
+			if (g != null){
+				g.deactivateAll();
+			}
+		}
+	}
+
+	private static void mirrorExamine( Integer cell ){
+		if (cell == null || cell < 0 || cell >= Dungeon.level.length()) return;
+		Char ch = Actor.findChar( cell );
+		if (ch instanceof Mob){
+			GameScene.show(new WndInfoMob((Mob) ch));
+			return;
+		}
+		Heap heap = Dungeon.level.heaps.get(cell);
+		if (heap != null && !heap.isEmpty()){
+			GameScene.show(new WndInfoItem(heap));
+			return;
+		}
+		Plant plant = Dungeon.level.plants.get( cell );
+		if (plant != null){
+			GameScene.show( new WndInfoPlant(plant) );
+			return;
+		}
+		Trap trap = Dungeon.level.traps.get( cell );
+		if (trap != null && trap.visible){
+			GameScene.show( new WndInfoTrap(trap));
+			return;
+		}
+		if (ch == null){
+			GameScene.show(new WndInfoCell(cell));
 		}
 	}
 	
@@ -1561,9 +1654,17 @@ public class GameScene extends PixelScene {
 		gameOver.show( 0x000000, 2f );
 		scene.showBanner( gameOver );
 
-		StyledButton restart = new StyledButton(Chrome.Type.GREY_BUTTON_TR, Messages.get(StartScene.class, "new"), 9){
+		final boolean online = MP.authority;
+		if (online) MP.onGameFinished(false);
+
+		StyledButton restart = new StyledButton(Chrome.Type.GREY_BUTTON_TR,
+				online ? MP.txt("to_lobby") : Messages.get(StartScene.class, "new"), 9){
 			@Override
 			protected void onClick() {
+				if (online){
+					MP.endGameToLobby(true);
+					return;
+				}
 				GamesInProgress.selectedClass = Dungeon.hero.heroClass;
 				GamesInProgress.curSlot = GamesInProgress.firstEmpty();
 				ShatteredPixelDungeon.switchScene(HeroSelectScene.class);
@@ -1628,7 +1729,7 @@ public class GameScene extends PixelScene {
 			cellSelector.listener.onSelect(null);
 		}
 		cellSelector.listener = listener;
-		cellSelector.enabled = Dungeon.hero.ready;
+		cellSelector.enabled = Dungeon.hero.ready || MP.mirror;
 		if (scene != null) {
 			scene.prompt(listener.prompt());
 		}
@@ -1828,6 +1929,10 @@ public class GameScene extends PixelScene {
 	private static final CellSelector.Listener defaultCellListener = new CellSelector.Listener() {
 		@Override
 		public void onSelect( Integer cell ) {
+			if (MP.mirror) {
+				MPMirror.onCellSelected( cell );
+				return;
+			}
 			if (Dungeon.hero.handle( cell )) {
 				Dungeon.hero.next();
 			}
@@ -1835,6 +1940,10 @@ public class GameScene extends PixelScene {
 
 		@Override
 		public void onRightClick(Integer cell) {
+			if (MP.mirror) {
+				mirrorExamine( cell );
+				return;
+			}
 			if (cell == null
 					|| cell < 0
 					|| cell > Dungeon.level.length()

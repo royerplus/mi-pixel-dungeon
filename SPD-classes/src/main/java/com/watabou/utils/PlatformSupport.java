@@ -76,6 +76,11 @@ public abstract class PlatformSupport {
 		//does nothing by default
 	}
 
+	//some platforms (Android) filter broadcast packets unless a lock is held
+	public void setMulticastLock( boolean enabled ){
+		//does nothing by default
+	}
+
 	public boolean openURI( String uri ){
 		return Gdx.net.openURI( uri );
 	}
@@ -146,7 +151,8 @@ public abstract class PlatformSupport {
 	public BitmapFont getFont(int size, String text, boolean flipped, boolean border) {
 		FreeTypeFontGenerator generator = getGeneratorForString(text);
 
-		if (generator == null){
+		//can happen while a desktop window is minimized, nothing can be rendered then
+		if (generator == null || size <= 0){
 			return null;
 		}
 

@@ -21,6 +21,8 @@
 
 package com.shatteredpixel.shatteredpixeldungeon;
 
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MP;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MPAutoTest;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.PixelScene;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.TitleScene;
@@ -69,6 +71,14 @@ public class ShatteredPixelDungeon extends Game {
 
 		Sample.INSTANCE.load( Assets.Sounds.all );
 		
+	}
+
+	@Override
+	protected void update() {
+		super.update();
+		//online play: process network messages once per frame
+		MP.update();
+		if (MPAutoTest.ENABLED) MPAutoTest.update();
 	}
 
 	@Override

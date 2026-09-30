@@ -32,6 +32,10 @@ import com.shatteredpixel.shatteredpixeldungeon.effects.BannerSprites;
 import com.shatteredpixel.shatteredpixeldungeon.effects.Fireball;
 import com.shatteredpixel.shatteredpixeldungeon.messages.Languages;
 import com.shatteredpixel.shatteredpixeldungeon.messages.Messages;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MP;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MPMirror;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.WndOnline;
+import com.shatteredpixel.shatteredpixeldungeon.windows.WndMessage;
 import com.shatteredpixel.shatteredpixeldungeon.services.news.News;
 import com.shatteredpixel.shatteredpixeldungeon.services.updates.AvailableUpdateData;
 import com.shatteredpixel.shatteredpixeldungeon.services.updates.Updates;
@@ -85,6 +89,13 @@ public class TitleScene extends PixelScene {
 	public void create() {
 		
 		super.create();
+
+		//players still in an online session go back to their lobby
+		if (MP.redirectFromTitle()){
+			return;
+		}
+		HeroSelectScene.onlineMode = false;
+		MPMirror.clearWorldIfCopy();
 
 		Music.INSTANCE.playTracks(
 				new String[]{Assets.Music.THEME_1, Assets.Music.THEME_2},
@@ -193,8 +204,15 @@ public class TitleScene extends PixelScene {
 		btnJournal.icon(Icons.get(Icons.JOURNAL));
 		add(btnJournal);
 
-		btnNews = new NewsButton(GREY_TR, Messages.get(this, "news"));
-		btnNews.icon(Icons.get(Icons.NEWS));
+		//the news button is replaced by online play
+		btnNews = new StyledButton(GREY_TR, MP.txt("online")){
+			@Override
+			protected void onClick() {
+				ShatteredPixelDungeon.scene().addToFront(new WndOnline());
+			}
+		};
+		btnNews.icon(Icons.get(Icons.SHUFFLE));
+		btnNews.textColor(Window.TITLE_COLOR);
 		add(btnNews);
 
 		btnChanges = new ChangesButton(GREY_TR, Messages.get(this, "changes"));
@@ -299,6 +317,11 @@ public class TitleScene extends PixelScene {
 		if (Badges.isUnlocked(Badges.Badge.VICTORY) && !SPDSettings.victoryNagged()) {
 			SPDSettings.victoryNagged(true);
 			add(new WndVictoryCongrats());
+		}
+
+		if (MP.pendingTitleMessage != null){
+			add(new WndMessage(MP.pendingTitleMessage));
+			MP.pendingTitleMessage = null;
 		}
 
 		fadeIn();

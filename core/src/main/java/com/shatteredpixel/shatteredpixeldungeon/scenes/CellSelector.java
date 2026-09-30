@@ -28,6 +28,8 @@ import com.shatteredpixel.shatteredpixeldungeon.actors.Actor;
 import com.shatteredpixel.shatteredpixeldungeon.actors.Char;
 import com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob;
 import com.shatteredpixel.shatteredpixeldungeon.items.Heap;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MP;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MPMirror;
 import com.shatteredpixel.shatteredpixeldungeon.tiles.DungeonTilemap;
 import com.watabou.input.ControllerHandler;
 import com.watabou.input.GameAction;
@@ -150,7 +152,7 @@ public class CellSelector extends ScrollArea {
 	}
 	
 	public void select( int cell, int button ) {
-		if (enabled && Dungeon.hero.ready && !GameScene.interfaceBlockingHero()
+		if (enabled && (Dungeon.hero.ready || MP.mirror) && !GameScene.interfaceBlockingHero()
 				&& listener != null && cell != -1) {
 
 			switch (button){
@@ -241,6 +243,7 @@ public class CellSelector extends ScrollArea {
 			} else if (dragging) {
 				camera.shift( PointF.diff( lastPos, event.current ).invScale( camera.zoom ) );
 				lastPos.set( event.current );
+				if (MP.mirror) MPMirror.onCameraDragged();
 			}
 		}
 		
@@ -327,6 +330,15 @@ public class CellSelector extends ScrollArea {
 				}
 
 			} else if (!directionFromAction(action).isZero()) {
+
+				//the enemy player moves their creature one step per key press
+				if (MP.mirror) {
+					if (!GameScene.interfaceBlockingHero()) {
+						Point dir = directionFromAction(action);
+						MPMirror.keyMove(dir.x, dir.y);
+					}
+					return true;
+				}
 
 				Dungeon.hero.resting = false;
 				lastCellMoved = -1;

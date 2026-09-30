@@ -90,6 +90,7 @@ import com.shatteredpixel.shatteredpixeldungeon.levels.VaultLevel;
 import com.shatteredpixel.shatteredpixeldungeon.levels.features.Chasm;
 import com.shatteredpixel.shatteredpixeldungeon.levels.traps.Trap;
 import com.shatteredpixel.shatteredpixeldungeon.messages.Messages;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MPAuthority;
 import com.shatteredpixel.shatteredpixeldungeon.plants.Swiftthistle;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene;
 import com.shatteredpixel.shatteredpixeldungeon.sprites.CharSprite;
@@ -281,6 +282,14 @@ public abstract class Mob extends Char {
 			return true;
 		}
 
+		//online play: this creature may be controlled by the enemy player
+		if (MPAuthority.isPossessed(this)) {
+			Boolean controlled = mpAct();
+			if (controlled != null) {
+				return controlled;
+			}
+		}
+
 		if (buff(Terror.class) != null || buff(Dread.class) != null ){
 			state = FLEEING;
 		}
@@ -309,6 +318,104 @@ public abstract class Mob extends Char {
 		}
 
 		return result;
+	}
+
+	//acts as instructed by the enemy player. Returns null when the regular AI should act instead.
+	private Boolean mpAct(){
+
+		if (!MPAuthority.canControl(this)){
+			MPAuthority.lostControl(this);
+			return null;
+		}
+
+		//fear, rage, magical sleep and similar effects override the player's control
+		if (buff(Terror.class) != null || buff(Dread.class) != null || buff(Amok.class) != null
+				|| buff(Sleep.class) != null || buff(Feint.AfterImage.FeintConfusion.class) != null){
+			MPAuthority.stopTravel();
+			return null;
+		}
+
+		if (state != HUNTING){
+			state = HUNTING;
+		}
+		Hero hero = Dungeon.hero;
+		enemySeen = hero != null && hero.isAlive() && fieldOfView[hero.pos] && hero.invisible <= 0;
+
+		MPAuthority.beginTurn();
+		while (true) {
+			MPAuthority.Cmd cmd = MPAuthority.nextCommand(this);
+
+			if (cmd == MPAuthority.INTERRUPTED) {
+				//the scene is changing, act again later without spending time
+				return false;
+			} else if (cmd == MPAuthority.AI_TURN) {
+				MPAuthority.stopTravel();
+				return null;
+			}
+
+			if (cmd.isWait() || cmd.cell() == pos) {
+				MPAuthority.stopTravel();
+				spend(TICK);
+				return true;
+			}
+
+			int cell = cmd.cell();
+			if (!Dungeon.level.insideMap(cell)) {
+				continue;
+			}
+
+			Char tgt = Actor.findChar(cell);
+			if (tgt != null && tgt != this && mpIsHostile(tgt)) {
+				if (mpCanHit(tgt)) {
+					MPAuthority.stopTravel();
+					enemy = tgt;
+					enemySeen = true;
+					target = tgt.pos;
+					recentlyAttackedBy.clear();
+					return doAttack(tgt);
+				}
+				if (cmd.explicit()) {
+					MPAuthority.travelTo(cell, tgt.id(), HP);
+				}
+			} else if (cmd.explicit()) {
+				MPAuthority.travelTo(cell, 0, HP);
+			}
+
+			int oldPos = pos;
+			if (getCloser(cell)) {
+				if (pos == cell) {
+					MPAuthority.stopTravel();
+				}
+				MPAuthority.travelStepped(HP);
+				spend(1 / speed());
+				return moveSprite(oldPos, pos);
+			} else {
+				MPAuthority.stopTravel();
+				if (cmd.explicit()) {
+					MPAuthority.notifyBlocked();
+				}
+				//ask for another order
+			}
+		}
+	}
+
+	private boolean mpIsHostile( Char ch ){
+		return ch.alignment != alignment && ch.alignment != Alignment.NEUTRAL;
+	}
+
+	private boolean mpCanHit( Char ch ){
+		return ch.isAlive() && fieldOfView != null && fieldOfView[ch.pos]
+				&& ch.invisible <= 0 && !isCharmedBy(ch) && canAttack(ch);
+	}
+
+	//whether the possessed creature could attack something right now
+	public boolean mpHasTargetInReach(){
+		for (Char ch : Actor.chars()){
+			if (ch != this && mpIsHostile(ch) && mpCanHit(ch)){
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private float timeSeenAt = Float.MAX_VALUE;
@@ -929,8 +1036,10 @@ public abstract class Mob extends Char {
 	public void destroy() {
 		
 		super.destroy();
-		
+
 		Dungeon.level.mobs.remove( this );
+
+		MPAuthority.onMobGone( this );
 
 		if (Dungeon.hero.buff(MindVision.class) != null){
 			Dungeon.observe();

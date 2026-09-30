@@ -168,6 +168,12 @@ public class DesktopLauncher {
 			baseFileType = Files.FileType.Absolute;
 		}
 
+		//allows running a second copy with separate data, useful for testing online play on one computer
+		String profile = System.getenv("SPD_PROFILE");
+		if (profile != null && profile.matches("[A-Za-z0-9_]+")){
+			basePath += "profile_" + profile + "/";
+		}
+
 		config.setPreferencesConfig( basePath, baseFileType );
 		SPDSettings.set( new Lwjgl3Preferences( new Lwjgl3FileHandle(basePath + SPDSettings.DEFAULT_PREFS_FILE, baseFileType) ));
 		FileUtils.setDefaultFileProperties( baseFileType, basePath );

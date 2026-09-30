@@ -42,6 +42,9 @@ import com.shatteredpixel.shatteredpixeldungeon.levels.features.Chasm;
 import com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition;
 import com.shatteredpixel.shatteredpixeldungeon.levels.rooms.special.SpecialRoom;
 import com.shatteredpixel.shatteredpixeldungeon.messages.Messages;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MP;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MPAuthority;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MPAutoTest;
 import com.shatteredpixel.shatteredpixeldungeon.ui.GameLog;
 import com.shatteredpixel.shatteredpixeldungeon.ui.IconButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Icons;
@@ -276,7 +279,7 @@ public class InterlevelScene extends PixelScene {
 		align(loadingText);
 		add(loadingText);
 
-		if (mode == Mode.DESCEND && lastRegion <= 5 && !DeviceCompat.isDebug()){
+		if (mode == Mode.DESCEND && lastRegion <= 5 && !DeviceCompat.isDebug() && !MPAutoTest.ENABLED){
 			if (Dungeon.hero == null || (loadingDepth > Statistics.deepestFloor && loadingDepth % 5 == 1)){
 					storyMessage = PixelScene.renderTextBlock(Document.INTROS.pageBody(region), 6);
 					storyMessage.maxWidth( PixelScene.landscape() ? 180 : 125);
@@ -409,6 +412,9 @@ public class InterlevelScene extends PixelScene {
 
 		phase = Phase.FADE_IN;
 		timeLeft = fadeTime;
+
+		//lets the enemy player know the hero is moving between floors
+		if (MP.authority) MPAuthority.onTransition();
 		
 		if (thread == null) {
 			thread = new Thread() {

@@ -32,6 +32,8 @@ import com.shatteredpixel.shatteredpixeldungeon.ShatteredPixelDungeon;
 import com.shatteredpixel.shatteredpixeldungeon.actors.hero.HeroClass;
 import com.shatteredpixel.shatteredpixeldungeon.journal.Journal;
 import com.shatteredpixel.shatteredpixeldungeon.messages.Messages;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.LobbyScene;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MP;
 import com.shatteredpixel.shatteredpixeldungeon.ui.ActionIndicator;
 import com.shatteredpixel.shatteredpixeldungeon.ui.CheckBox;
 import com.shatteredpixel.shatteredpixeldungeon.ui.ExitButton;
@@ -97,11 +99,18 @@ public class HeroSelectScene extends PixelScene {
 	private static boolean heroWasRandomized = true;
 	private static boolean chalWasRandomized = false;
 
+	//when true, the hero is being picked for an online game and the scene returns to the lobby
+	public static boolean onlineMode = false;
+
 	@Override
 	public void create() {
 		super.create();
 
 		Dungeon.hero = null;
+
+		if (onlineMode && !MP.sessionActive()){
+			onlineMode = false;
+		}
 
 		Badges.loadGlobal();
 		Journal.loadGlobal();
@@ -153,6 +162,13 @@ public class HeroSelectScene extends PixelScene {
 				super.onClick();
 
 				if (GamesInProgress.selectedClass == null) return;
+
+				if (onlineMode){
+					onlineMode = false;
+					MP.setMyClass(GamesInProgress.selectedClass);
+					ShatteredPixelDungeon.switchNoFade(LobbyScene.class);
+					return;
+				}
 
 				Dungeon.hero = null;
 				Dungeon.daily = Dungeon.dailyReplay = false;
@@ -294,7 +310,7 @@ public class HeroSelectScene extends PixelScene {
 			heroDesc.setPos(insets.left, heroName.bottom()+5);
 			add(heroDesc);
 
-			startBtn.text(Messages.titleCase(Messages.get(this, "start")));
+			startBtn.text(onlineMode ? MP.txt("continue") : Messages.titleCase(Messages.get(this, "start")));
 			startBtn.setSize(startBtn.reqWidth()+8, 21);
 			startBtn.setPos(insets.left + (leftArea - startBtn.width())/2f, title.top() + uiHeight - startBtn.height());
 			align(startBtn);
@@ -355,7 +371,17 @@ public class HeroSelectScene extends PixelScene {
 			optionsPane.setPos(heroBtns.get(0).left(), 0);
 		}
 
-		btnExit = new ExitButton();
+		btnExit = new ExitButton(){
+			@Override
+			protected void onClick() {
+				if (onlineMode){
+					onlineMode = false;
+					ShatteredPixelDungeon.switchNoFade(LobbyScene.class);
+				} else {
+					super.onClick();
+				}
+			}
+		};
 		int ofs = PixelScene.landscape() ? 0 : 4;
 		btnExit.setPos( Camera.main.width - btnExit.width() - ofs, ofs );
 		add( btnExit );
@@ -460,7 +486,7 @@ public class HeroSelectScene extends PixelScene {
 			title.visible = false;
 
 			startBtn.visible = startBtn.active = true;
-			startBtn.text(Messages.titleCase(cl.title()));
+			startBtn.text(onlineMode ? MP.txt("continue_as", Messages.titleCase(cl.title())) : Messages.titleCase(cl.title()));
 			startBtn.setSize(startBtn.reqWidth() + 8, 21);
 
 			startBtn.setPos((Camera.main.width - startBtn.width())/2f, (Camera.main.height - insets.bottom - HeroBtn.HEIGHT + 2 - startBtn.height()));
@@ -555,7 +581,10 @@ public class HeroSelectScene extends PixelScene {
 
 	@Override
 	protected void onBackPressed() {
-		if (btnExit.active){
+		if (onlineMode){
+			onlineMode = false;
+			ShatteredPixelDungeon.switchNoFade(LobbyScene.class);
+		} else if (btnExit.active){
 			ShatteredPixelDungeon.switchScene(TitleScene.class);
 		} else {
 			super.onBackPressed();
@@ -792,8 +821,10 @@ public class HeroSelectScene extends PixelScene {
 			};
 			dailyButton.leftJustify = true;
 			dailyButton.icon(Icons.get(Icons.CALENDAR));
-			add(dailyButton);
-			buttons.add(dailyButton);
+			if (!onlineMode) {
+				add(dailyButton);
+				buttons.add(dailyButton);
+			}
 
 			challengeButton = new StyledButton(Chrome.Type.BLANK, Messages.get(WndChallenges.class, "title"), 6){
 				@Override

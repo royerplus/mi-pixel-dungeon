@@ -26,6 +26,7 @@ import com.shatteredpixel.shatteredpixeldungeon.Dungeon;
 import com.shatteredpixel.shatteredpixeldungeon.actors.buffs.HeroDisguise;
 import com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero;
 import com.shatteredpixel.shatteredpixeldungeon.actors.hero.HeroClass;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MPMirror;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene;
 import com.watabou.gltextures.SmartTexture;
 import com.watabou.gltextures.TextureCache;
@@ -104,7 +105,7 @@ public class HeroSprite extends CharSprite {
 	@Override
 	public void place( int p ) {
 		super.place( p );
-		if (Game.scene() instanceof GameScene) Camera.main.panFollow(this, 5f);
+		if (Game.scene() instanceof GameScene && MPMirror.cameraFollowsHero()) Camera.main.panFollow(this, 5f);
 	}
 
 	@Override
@@ -113,7 +114,7 @@ public class HeroSprite extends CharSprite {
 		if (ch != null && ch.flying) {
 			play( fly );
 		}
-		Camera.main.panFollow(this, 20f);
+		if (MPMirror.cameraFollowsHero()) Camera.main.panFollow(this, 20f);
 	}
 
 	@Override
@@ -128,7 +129,7 @@ public class HeroSprite extends CharSprite {
 	public void jump( int from, int to, float height, float duration,  Callback callback ) {
 		super.jump( from, to, height, duration, callback );
 		play( fly );
-		Camera.main.panFollow(this, 20f);
+		if (MPMirror.cameraFollowsHero()) Camera.main.panFollow(this, 20f);
 	}
 
 	public synchronized void read() {

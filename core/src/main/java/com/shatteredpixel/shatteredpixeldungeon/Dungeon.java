@@ -74,6 +74,7 @@ import com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition;
 import com.shatteredpixel.shatteredpixeldungeon.levels.rooms.secret.SecretRoom;
 import com.shatteredpixel.shatteredpixeldungeon.levels.rooms.special.SpecialRoom;
 import com.shatteredpixel.shatteredpixeldungeon.messages.Messages;
+import com.shatteredpixel.shatteredpixeldungeon.multiplayer.MP;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene;
 import com.shatteredpixel.shatteredpixeldungeon.ui.QuickSlotButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Toolbar;
@@ -622,7 +623,21 @@ public class Dungeon {
 	private static final String BADGES		= "badges";
 	
 	public static void saveGame( int save ) {
+		//the enemy player's device only mirrors the game and must never write saves
+		if (MP.mirror) return;
 		try {
+			Bundle bundle = gameBundle();
+
+			FileUtils.bundleToFile( GamesInProgress.gameFile(save), bundle);
+			
+		} catch (IOException e) {
+			GamesInProgress.setUnknown( save );
+			ShatteredPixelDungeon.reportException(e);
+		}
+	}
+
+	//everything saved about the current run except the levels, also used for online play
+	public static Bundle gameBundle() {
 			Bundle bundle = new Bundle();
 
 			bundle.put( INIT_VER, initialVersion );
@@ -687,16 +702,12 @@ public class Dungeon {
 			Bundle badges = new Bundle();
 			Badges.saveLocal( badges );
 			bundle.put( BADGES, badges );
-			
-			FileUtils.bundleToFile( GamesInProgress.gameFile(save), bundle);
-			
-		} catch (IOException e) {
-			GamesInProgress.setUnknown( save );
-			ShatteredPixelDungeon.reportException(e);
-		}
+
+			return bundle;
 	}
 	
 	public static void saveLevel( int save ) throws IOException {
+		if (MP.mirror) return;
 		Bundle bundle = new Bundle();
 		bundle.put( LEVEL, level );
 		
@@ -704,6 +715,7 @@ public class Dungeon {
 	}
 	
 	public static void saveAll() throws IOException {
+		if (MP.mirror) return;
 		if (hero != null && (hero.isAlive() || WndResurrect.instance != null)) {
 			
 			Actor.fixTime();
@@ -723,6 +735,10 @@ public class Dungeon {
 	public static void loadGame( int save, boolean fullLoad ) throws IOException {
 		
 		Bundle bundle = FileUtils.bundleFromFile( GamesInProgress.gameFile( save ) );
+		loadGame( bundle, fullLoad );
+	}
+
+	public static void loadGame( Bundle bundle, boolean fullLoad ) {
 
 		initialVersion = bundle.getInt( INIT_VER );
 		version = bundle.getInt( VERSION );
@@ -878,6 +894,8 @@ public class Dungeon {
 	}
 	
 	public static void win( Object cause ) {
+
+		if (MP.authority) MP.onGameFinished(true);
 
 		updateLevelExplored();
 		Statistics.gameWon = true;

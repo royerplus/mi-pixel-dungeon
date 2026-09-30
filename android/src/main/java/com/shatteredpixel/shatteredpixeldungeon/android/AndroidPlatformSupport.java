@@ -25,6 +25,7 @@ import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.graphics.Rect;
 import android.net.ConnectivityManager;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.view.DisplayCutout;
 import android.view.View;
@@ -193,6 +194,27 @@ public class AndroidPlatformSupport extends PlatformSupport {
 	@Override
 	public boolean supportsVibration() {
 		return true; //always true on Android
+	}
+
+	private WifiManager.MulticastLock multicastLock;
+
+	@Override
+	public synchronized void setMulticastLock(boolean enabled) {
+		try {
+			if (enabled) {
+				if (multicastLock == null) {
+					WifiManager wifi = (WifiManager) AndroidLauncher.instance.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+					if (wifi == null) return;
+					multicastLock = wifi.createMulticastLock("spd-online");
+					multicastLock.setReferenceCounted(false);
+				}
+				if (!multicastLock.isHeld()) multicastLock.acquire();
+			} else if (multicastLock != null && multicastLock.isHeld()) {
+				multicastLock.release();
+			}
+		} catch (Exception e) {
+			//discovery still works on most networks without the lock
+		}
 	}
 
 	/* FONT SUPPORT */
